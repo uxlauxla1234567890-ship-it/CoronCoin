@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CoronCoin Bot</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
+    <style>
+        * {
+            -webkit-tap-highlight-color: transparent;
+            outline: none;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background-color: #0f172a;
+            color: #f8fafc;
+            margin: 0;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .container {
+            width: 100%;
+            max-width: 400px;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+        .lang-switch button {
+            background: #1e293b;
+            color: #fff;
+            border: 1px solid #334155;
+            padding: 6px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+        .balance-cards {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+        .card {
+            background: #1e293b;
+            flex: 1;
+            padding: 16px;
+            border-radius: 12px;
+            text-align: center;
+            border: 1px solid #334155;
+        }
+        .card h3 {
+            margin: 0 0 8px 0;
+            font-size: 12px;
+            color: #94a3b8;
+        }
+        .card p {
+            margin: 0;
+            font-size: 18px;
+            font-weight: bold;
+        }
+        .btn {
+            width: 100%;
+            padding: 14px;
+            border-radius: 12px;
+            border: none;
+            font-size: 15px;
+            font-weight: bold;
+            cursor: pointer;
+            margin-bottom: 16px;
+            text-align: center;
+        }
+        .btn-ad {
+            background: linear-gradient(135deg, #475569, #334155);
+            color: #94a3b8;
+            cursor: not-allowed;
+        }
+        .section {
+            background: #1e293b;
+            padding: 16px;
+            border-radius: 12px;
+            border: 1px solid #334155;
+            margin-bottom: 16px;
+        }
+        .section h4 {
+            margin: 0 0 8px 0;
+            font-size: 14px;
+            color: #94a3b8;
+        }
+        .section p {
+            margin: 0 0 12px 0;
+            font-size: 13px;
+            color: #64748b;
+        }
+        .btn-action {
+            background: #334155;
+            color: #fff;
+        }
+        .btn-action:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        #wallet-container {
+            width: 100%;
+            margin-bottom: 16px;
+            display: flex;
+            justify-content: center;
+        }
+        .notice {
+            font-size: 11px;
+            color: #f59e0b;
+            text-align: center;
+            margin-bottom: 12px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="header">
+        <h2 id="app-title" style="margin:0;">CoronCoin</h2>
+        <div class="lang-switch">
+            <button onclick="setLang('en')">EN</button>
+            <button onclick="setLang('ru')">RU</button>
+        </div>
+    </div>
+
+    <div class="balance-cards">
+        <div class="card">
+            <h3 id="txt-coins-title">COINS BALANCE</h3>
+            <p>🪙 <span id="coins-val">3</span></p>
+        </div>
+        <div class="card">
+            <h3 id="txt-ton-title">TON BALANCE</h3>
+            <p>💎 <span id="ton-val">0.000</span></p>
+        </div>
+    </div>
+
+    <button class="btn btn-ad" onclick="watchAd()" id="btn-watch-ad">⏳ ADGRAM PENDING (ADS OFF)</button>
+
+    <div class="section">
+        <h4 id="txt-swap-title">SWAP COINS TO TON</h4>
+        <p id="txt-swap-desc">Exchange rate: 500 Coins = 0.01 TON</p>
+        <button class="btn btn-action" onclick="swapCoins()" id="btn-swap">EXCHANGE (500 COINS)</button>
+    </div>
+
+    <div class="section">
+        <h4 id="txt-withdraw-title">WITHDRAW TON</h4>
+        <p class="notice" id="txt-wallet-notice">⚠️ Only TONKEEPER wallet is allowed!</p>
+        <div id="wallet-container"></div>
+        <button class="btn btn-action" onclick="withdrawTon()" id="btn-withdraw" disabled>WITHDRAW TON</button>
+        <p id="txt-min-withdraw" style="margin-top:8px; text-align:center;">Minimum withdrawal: 0.5 TON (Processed in 72h)</p>
+    </div>
+</div>
+
+<script>
+    let coins = 3;
+    let ton = 0.000;
+    let currentLang = 'en';
+    let userWalletAddress = '';
+
+    const tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
+        manifestUrl: 'https://raw.githubusercontent.com/ton-connect/docs/main/manifest.json',
+        buttonRootId: 'wallet-container',
+        actionsConfiguration: {
+            twaReturnUrl: 'https://t.me/'
+        }
+    });
+
+    tonConnectUI.onStatusChange(walletInfo => {
+        if (walletInfo && walletInfo.account && walletInfo.account.address) {
+            const walletName = walletInfo.device && walletInfo.device.appName ? walletInfo.device.appName.toLowerCase() : '';
+            
+            if (walletName && !walletName.includes('tonkeeper')) {
+                alert(currentLang === 'ru' ? "Ошибка: Разрешен вывод только на кошелек Tonkeeper!" : "Error: Withdrawal is allowed only to Tonkeeper wallet!");
+                tonConnectUI.disconnect();
+                userWalletAddress = '';
+                document.getElementById('btn-withdraw').disabled = true;
+                return;
+            }
+
+            userWalletAddress = walletInfo.account.address;
+            document.getElementById('btn-withdraw').disabled = false;
+        } else {
+            userWalletAddress = '';
+            document.getElementById('btn-withdraw').disabled = true;
+        }
+    });
+
+    const translations = {
+        en: {
+            coinsTitle: "COINS BALANCE",
+            tonTitle: "TON BALANCE",
+            watchAd: "⏳ ADGRAM PENDING (ADS OFF)",
+            swapTitle: "SWAP COINS TO TON",
+            swapDesc: "Exchange rate: 500 Coins = 0.01 TON",
+            swapBtn: "EXCHANGE (500 COINS)",
+            withdrawTitle: "WITHDRAW TON",
+            walletNotice: "⚠️ Only TONKEEPER wallet is allowed!",
+            withdrawBtn: "WITHDRAW TON",
+            minWithdraw: "Minimum withdrawal: 0.5 TON (Processed in 72h)"
+        },
+        ru: {
+            coinsTitle: "БАЛАНС МОНЕТ",
+            tonTitle: "БАЛАНС TON",
+            watchAds: "⏳ ADGRAM НА МОДЕРАЦИИ (РЕКЛАМЫ НЕТ)",
+            swapTitle: "ОБМЕН МОНЕТ НА TON",
+            swapDesc: "Курс обмена: 500 Монет = 0.01 TON",
+            swapBtn: "ОБМЕНЯТЬ (500 МОНЕТ)",
+            withdrawTitle: "ВЫВОД TON",
+            walletNotice: "⚠️ Разрешен только кошелек TONKEEPER!",
+            withdrawBtn: "ВЫВЕСТИ TON",
+            minWithdraw: "Минимум 0.5 TON (Вывод в течение 72ч)"
+        }
+    };
+
+    function setLang(lang) {
+        currentLang = lang;
+        const t = translations[lang];
+        document.getElementById('txt-coins-title').innerText = t.coinsTitle;
+        document.getElementById('txt-ton-title').innerText = t.tonTitle;
+        document.getElementById('btn-watch-ad').innerText = t.watchAd;
+        document.getElementById('txt-swap-title').innerText = t.swapTitle;
+        document.getElementById('txt-swap-desc').innerText = t.swapDesc;
+        document.getElementById('btn-swap').innerText = t.swapBtn;
+        document.getElementById('txt-withdraw-title').innerText = t.withdrawTitle;
+        document.getElementById('txt-wallet-notice').innerText = t.walletNotice;
+        document.getElementById('btn-withdraw').innerText = t.withdrawBtn;
+        document.getElementById('txt-min-withdraw').innerText = t.minWithdraw;
+    }
+
+    function triggerHaptic() {
+        if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.HapticFeedback) {
+            try {
+                window.Telegram.WebApp.HapticFeedback.impactOccurred('medium');
+            } catch (e) {}
+        }
+    }
+
+    function watchAd() {
+        triggerHaptic();
+        alert(currentLang === 'ru' ? "Реклама пока недоступна. Ожидается одобрение AdGram." : "Ads are not available yet. Waiting for AdGram approval.");
+    }
+
+    function swapCoins() {
+        triggerHaptic();
+        if (coins >= 500) {
+            coins -= 500;
+            ton += 0.01;
+            updateUI();
+            alert(currentLang === 'ru' ? "Успешный обмен!" : "Exchange successful!");
+        } else {
+            alert(currentLang === 'ru' ? "Недостаточно монет (нужно 500)" : "Not enough coins (need 500)");
+        }
+    }
+
+    function withdrawTon() {
+        triggerHaptic();
+        if (ton >= 0.5) {
+            if (!userWalletAddress) {
+                alert(currentLang === 'ru' ? "Пожалуйста, подключите кошелек Tonkeeper!" : "Please connect your Tonkeeper wallet!");
+                return;
+            }
+
+            const withdrawData = JSON.stringify({
+                action: "withdraw_tonkeeper",
+                amount: ton,
+                wallet: userWalletAddress
+            });
+
+            if (window.Telegram && window.Telegram.WebApp) {
+                window.Telegram.WebApp.sendData(withdrawData);
+            } else {
+                alert(currentLang === 'ru' ? "Запрос принят! TON будет отправлен на ваш Tonkeeper в течение 72 часов." : "Request accepted! TON will be sent to your Tonkeeper within 72 hours.");
+            }
+        } else {
+            alert(currentLang === 'ru' ? "Минимум 0.5 TON для вывода" : "Minimum 0.5 TON required");
+        }
+    }
+
+    function updateUI() {
+        document.getElementById('coins-val').innerText = coins;
+        document.getElementById('ton-val').innerText = ton.toFixed(3);
+    }
+</script>
+
+</body>
+      </html>
+  
